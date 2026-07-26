@@ -1,61 +1,42 @@
 <?php
 require_once('db.php');
 
+// Veri kaydetme: POST ile ottoman + turkish geldiğinde
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['ottoman']) && isset($_POST['turkish'])) {
-    // Veri kaydetme işlemi için POST isteği gönder
     $ottoman = $_POST['ottoman'];
     $turkish = $_POST['turkish'];
-    
-    // Veritabanı bağlantısı
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "ottoman";
 
-    $conn = new mysqli($servername, $username, $password, $dbname);
-
-    if ($conn->connect_error) {
-        die("Veritabanı bağlantısı başarısız: " . $conn->connect_error);
+    // Prepared statement ile SQL injection'a karşı güvenli ekleme
+    $stmt = $conn->prepare("INSERT INTO translate (ottoman, turkish) VALUES (?, ?)");
+    if ($stmt === false) {
+        echo "error";
+        $conn->close();
+        exit();
     }
+    $stmt->bind_param("ss", $ottoman, $turkish);
 
-    // SQL sorgusu ile veriyi ekleyin
-    $sql = "INSERT INTO translate (ottoman, turkish) VALUES ('$ottoman', '$turkish')";
-    if ($conn->query($sql) === TRUE) {
+    if ($stmt->execute()) {
         echo "success"; // Başarılı ekleme işlemi
     } else {
         echo "error"; // Hata durumunda
     }
 
+    $stmt->close();
     $conn->close();
     exit();
 }
 
-if ($_GET['action'] == 'get_data') {
-    // Veritabanı bağlantısı
-    $servername = "localhost";
-    $username = "root";
-    $password = "";
-    $dbname = "ottoman";
-    $conn = new mysqli($servername, $username, $password, $dbname);
-
-    // Bağlantı hatası kontrolü
-    if ($conn->connect_error) {
-        die("Veritabanı bağlantısı başarısız: " . $conn->connect_error);
-    }
-
-    // SQL sorgusu
+// Veri okuma: action=get_data
+if (isset($_GET['action']) && $_GET['action'] == 'get_data') {
     $sql = "SELECT ottoman, turkish FROM translate";
     $result = $conn->query($sql);
     $data = array();
 
-    // Veri kümesini dolaşarak verileri JSON formatına dönüştürme
-    if ($result->num_rows > 0) {
+    if ($result && $result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
-            $ottoman_text = $row["ottoman"];
-            $turkish_translation = $row["turkish"];
             $entry = array(
-                "ottoman_text" => $ottoman_text,
-                "turkish_translation" => $turkish_translation
+                "ottoman_text" => $row["ottoman"],
+                "turkish_translation" => $row["turkish"]
             );
             $data[] = $entry;
         }
@@ -65,11 +46,9 @@ if ($_GET['action'] == 'get_data') {
         echo json_encode(array("total_records" => 0, "data" => array()));
     }
 
-    // Veritabanı bağlantısını kapat
     $conn->close();
     exit();
 }
-
 
 echo "Invalid request"; // Geçersiz bir istek durumunda yanıt verin
 ?>

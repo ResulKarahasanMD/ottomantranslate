@@ -26,6 +26,22 @@ chars = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س',
 
 train_ratio = 0.8  # Eğitim verisi oranı
 script_path = os.getcwd()  # Kodun bulunduğu dizin
+
+# Dataset/chars klasörünü hem proje kökünden ('Dataset/chars') hem de alt
+# klasörden ('../Dataset/chars') çalıştırmaya dayanıklı şekilde bul.
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _chars_base_dir():
+    for candidate in (
+        os.path.join(_MODULE_DIR, 'Dataset', 'chars'),
+        os.path.join(os.getcwd(), 'Dataset', 'chars'),
+        os.path.join(os.getcwd(), '..', 'Dataset', 'chars'),
+    ):
+        if os.path.isdir(candidate):
+            return candidate
+    # Bulunamazsa modül dizinine göre varsayılan
+    return os.path.join(_MODULE_DIR, 'Dataset', 'chars')
 classifiers = [svm.LinearSVC(), MLPClassifier(alpha=1e-4, hidden_layer_sizes=(100,), max_iter=1000),
                MLPClassifier(alpha=1e-5, hidden_layer_sizes=(200, 100,), max_iter=1000), GaussianNB()]  # Sınıflandırıcı modelleri
 
@@ -113,25 +129,24 @@ def read_data(limit=4000):
     # Veri okuma işlemi
     X = []  # Girdi verisi
     Y = []  # Etiket verisi
-    print("For each char")
+    base_dir = _chars_base_dir()
+    print(f"For each char (data dir: {base_dir})")
     for char in tqdm(chars, total=len(chars)):
 
-        folder = f'../Dataset/chars/{char}'
-        char_paths = glob(f'../Dataset/chars/{char}/*.png')
+        folder = os.path.join(base_dir, char)
+        char_paths = glob(os.path.join(folder, '*.png'))
 
-        if os.path.exists(folder):
-            os.chdir(folder)
-
+        if os.path.isdir(folder):
             print(f'\nReading images for char {char}')
             for char_path in tqdm(char_paths[:limit], total=len(char_paths)):
-                num = re.findall(r'\d+', char_path)[0]
-                char_img = cv.imread(f'{num}.png', 0)
+                # Yolu değiştirmeden doğrudan tam yoldan oku
+                char_img = cv.imread(char_path, 0)
+                if char_img is None:
+                    continue
                 ready_char = prepare_char(char_img)
                 feature_vector = featurizer(ready_char)
                 X.append(feature_vector)  # Girdi verisine ekleme
                 Y.append(char)  # Etiket verisine ekleme
-
-            os.chdir(script_path)
 
     return X, Y  # Girdi ve etiket verilerini döndürme
 

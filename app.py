@@ -89,33 +89,66 @@ if menu_group == "OCR Yap":
     uploaded_file = st.file_uploader(
         "Resim yükleyin", type=["jpg", "png", "bmp"])
 
+    # Arşiv belgesi (çok sütunlu, kırmızı/siyah mürekkepli, çapraz yazı)
+    # modu: aktifse renk temizleme + bölge bazlı deskew uygulanır.
+    archive_mode = st.checkbox(
+        "Arşiv belgesi modu (kırmızı mürekkebi temizle, bölge bazlı işle)",
+        value=False,
+        help="BOA/nüfus defteri gibi kırmızı düzeltmeli, çok sütunlu belgeler için."
+    )
+
     if uploaded_file is not None:
         file_name = uploaded_file.name
         st.write(f"Yüklenen dosya adı: {file_name}")
 
+        os.makedirs('test', exist_ok=True)
         temp_file = os.path.join('test', file_name)
         with open(temp_file, "wb") as f:
             f.write(uploaded_file.read())
 
         if st.button("OCR İşlemi Başlat"):
-            st.spinner("OCR işlemi devam ediyor...")
+            with st.spinner("OCR işlemi devam ediyor..."):
+                result = run(temp_file, archive_mode=archive_mode)
 
-            img_name, character_count, word_count, ocr_result_arabic = run(
-                temp_file)
+            # Temp dosyayı OCR bittikten sonra temizle
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
+
+            if result is None or result[0] is None:
+                st.error(
+                    "OCR işlemi başarısız oldu. Görüntü okunamadı veya "
+                    "kelime/karakter ayrımı yapılamadı. (Arşiv belgesi modunu "
+                    "denemeyi düşünebilirsiniz.)")
+                st.stop()
+
+            img_name, character_count, word_count, ocr_result_arabic = result
+
+            # OCR sonucunu session_state'e yaz ki 'Çevir' butonu yeniden
+            # çalıştırmada (rerun) sonucu kaybetmesin.
+            st.session_state["ocr_done"] = True
+            st.session_state["ocr_text"] = ocr_result_arabic
+            st.session_state["ocr_meta"] = (img_name, character_count, word_count)
+
+        # OCR sonucu session_state'te varsa göster (rerun'dan bağımsız)
+        if st.session_state.get("ocr_done"):
+            img_name, character_count, word_count = st.session_state["ocr_meta"]
+            ocr_result_arabic = st.session_state["ocr_text"]
+
             st.success(
-                f"OCR işlemi tamamlandı! Sonuçlar: \nDosya Adı: {img_name}\nToplam Karakter Sayısı: {character_count}\nToplam Kelime Sayısı: {word_count}")
+                f"OCR işlemi tamamlandı! Sonuçlar: \nDosya Adı: {img_name}\n"
+                f"Toplam Karakter Sayısı: {character_count}\n"
+                f"Toplam Kelime Sayısı: {word_count}")
 
             st.subheader("OCR Sonuçları (Arapça):")
             st.text_area("OCR Çıktısı (Arapça):", ocr_result_arabic,
                          height=200, key="ocr_result_arabic")
 
             if st.button("Çevir"):
-                st.spinner("Çeviri işlemi devam ediyor...")
+                with st.spinner("Çeviri işlemi devam ediyor..."):
+                    translator = Translator(to_lang="tr")
+                    translated_text = translator.translate(ocr_result_arabic)
 
-                translator = Translator(to_lang="tr")
-                translated_text = translator.translate(ocr_result_arabic)
                 encoded_text = urllib.parse.quote(translated_text)
-
                 st.success("Çeviri işlemi tamamlandı!")
 
                 st.subheader("Çevrilen Metin (Türkçe):")
@@ -125,8 +158,6 @@ if menu_group == "OCR Yap":
                 google_translate_url = f"https://translate.google.com/?sl=ar&tl=tr&text={encoded_text}"
                 st.write(
                     f"[Google Translate'de Göster]({google_translate_url})")
-
-        os.unlink(temp_file)
 
 if menu_group == "Dataset Oluştur":
     st.header("Dataset Oluştur")
