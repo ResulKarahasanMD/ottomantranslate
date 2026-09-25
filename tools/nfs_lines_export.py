@@ -134,9 +134,9 @@ ta.forEach(t=>{{const k=t.parentElement.dataset.key; if(draft[k]) t.value=draft[
   t.addEventListener('input',()=>{{draft[k]=t.value; try{{localStorage.setItem(KEY,JSON.stringify(draft))}}catch(e){{}} stat();}});}});
 function stat(){{const n=ta.filter(t=>t.value.trim()).length; document.getElementById('stat').textContent=n+' / '+ta.length+' satır dolu';}}
 stat();
-// küçük kırpmaları okunur boya büyüt (yükseklik en az 110px, genişlik taşmasın)
+// küçük kırpmaları okunur boya büyüt (yükseklik en az 160px, genişlik taşmasın)
 document.querySelectorAll('img').forEach(im=>{{im.addEventListener('load',()=>{{
-  const k=Math.max(1,110/im.naturalHeight); im.style.width=Math.min(im.parentElement.clientWidth-16, im.naturalWidth*k)+'px';}});}});
+  const k=Math.max(1,160/im.naturalHeight); im.style.width=Math.min(im.parentElement.clientWidth-16, im.naturalWidth*k)+'px';}});}});
 document.getElementById('hs').onchange=e=>document.body.classList.toggle('hideshort',e.target.checked);
 document.getElementById('dl').onclick=()=>{{
   const rows=[{json.dumps([[r["page"], r["idx"], *r["box"], r["baseline_px"], int(r["baseline_px"] < a.short_px), r["img"]] for r in rows], ensure_ascii=False)}][0];
