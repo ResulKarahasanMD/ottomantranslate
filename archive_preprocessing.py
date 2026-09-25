@@ -21,15 +21,25 @@ import numpy as np
 import cv2 as cv
 
 
-def remove_red_ink(bgr_image, whiten=True):
+def remove_red_ink(bgr_image, whiten=True, hue_max=10, s_min=45):
     """Kırmızı mürekkebi görüntüden kaldırır.
 
     HSV uzayında kırmızı tonlarını maskeler ve bu pikselleri kağıt rengine
     (beyaz) çeker; böylece geriye yalnızca siyah metin kalır.
 
+    Eşikler NFS.d. 12369 s.2 üzerinde ölçüldü (2026-09-26): kırmızı mürekkep
+    hue 0-8 / 170-180, S≈110; sepya siyah mürekkep hue 8-25, S≈55; kağıt
+    hue≈16, S≈27. Eski hue üst sınırı 15 siyah bloğun koyu piksellerinin
+    %32'sini yutuyordu (vuruş içinde beyaz delikler); 10'a çekince %14'e
+    düştü, kırmızı temizliği %92,5'te sabit kaldı. S eşiğini yükseltmek
+    kırmızıyı kaçırıyor (S≥70 → %74), o yüzden 45'te bırakıldı.
+
     Args:
         bgr_image (numpy.ndarray): BGR (OpenCV) renkli giriş görüntüsü.
         whiten (bool): True ise kırmızı pikseller beyaza boyanır.
+        hue_max (int): Kırmızı sayılan hue yarı-genişliği (0..hue_max ve
+            180-hue_max..180). Sepya siyah mürekkep 8'in üzerinde başlar.
+        s_min (int): Minimum doygunluk; siyah mürekkep S≈0-45 civarındadır.
 
     Returns:
         numpy.ndarray: Kırmızı mürekkebi temizlenmiş BGR görüntü.
@@ -42,9 +52,9 @@ def remove_red_ink(bgr_image, whiten=True):
     # Kırmızı, HSV'de sarmalanma (wrap-around) nedeniyle iki aralıkta bulunur.
     # Doygunluk tabanı (S>=45) hem solmuş/koyu (bordo) arşiv mürekkebini yakalar
     # hem de düşük doygunluklu siyah metni korur (siyah S~0).
-    lower1 = np.array([0, 45, 40])
-    upper1 = np.array([15, 255, 255])
-    lower2 = np.array([165, 45, 40])
+    lower1 = np.array([0, s_min, 40])
+    upper1 = np.array([hue_max, 255, 255])
+    lower2 = np.array([180 - hue_max, s_min, 40])
     upper2 = np.array([180, 255, 255])
 
     mask = cv.inRange(hsv, lower1, upper1) | cv.inRange(hsv, lower2, upper2)

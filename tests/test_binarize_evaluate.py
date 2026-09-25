@@ -67,6 +67,23 @@ class BinarizeTests(unittest.TestCase):
         self.assertGreater((b_keep[70:110] == 255).sum(), 0)
 
 
+class RedInkTests(unittest.TestCase):
+    def test_sepia_black_kept_red_removed(self):
+        from archive_preprocessing import remove_red_ink
+        import cv2 as cv
+        # NFS s.2 ölçümleri: kırmızı hue≈3,S≈110; sepya siyah hue≈17,S≈55; kağıt hue≈16,S≈27
+        # Maske 3x3 genişletildiği için pikseller birbirinden uzak tutulur.
+        hsv = np.zeros((7, 7, 3), np.uint8)
+        hsv[..., :] = (16, 27, 220)  # kağıt
+        hsv[0, 0] = (3, 110, 150)    # kırmızı mürekkep
+        hsv[6, 6] = (17, 55, 60)     # sepya siyah mürekkep
+        bgr = cv.cvtColor(hsv, cv.COLOR_HSV2BGR)
+        out = remove_red_ink(bgr)
+        self.assertEqual(tuple(out[0, 0]), (255, 255, 255))      # kırmızı beyazlandı
+        self.assertTrue((out[6, 6] == bgr[6, 6]).all())          # siyah korundu
+        self.assertTrue((out[3, 3] == bgr[3, 3]).all())          # kağıt korundu
+
+
 class MetricTests(unittest.TestCase):
     def test_levenshtein(self):
         self.assertEqual(levenshtein("", ""), 0)
