@@ -52,6 +52,12 @@ venv/bin/python -m unittest tests.test_binarize_evaluate -v   # hızlı birim te
 - El yazısı NFS sayfası: `seg_general` taban çizgileri iyi (138 satır, kırmızı sayılar
   atlanıyor), ama Printed Ottoman modeli metni okuyamıyor; el yazısı için satır GT + ince
   ayar gerekir (`ketos train`).
+- **Satır GT hazırlığı:** `tools/nfs_lines_export.py` → `out_20260926_nfs_lines/` (9 sayfa,
+  745 satır kırpması, `lines.tsv` boş `gt` sütunu, `sheet.html` RTL transkripsiyon sayfası;
+  `short=1` olan 209 satır kırmızı sayı/parça adayı). Sayfa `python3 -m http.server 8765
+  --directory out_20260926_nfs_lines` ile açılır (`.claude/launch.json`: nfs-lines-sheet);
+  `file://` ile açılınca kırpmalar yüklenmez. Sayfa 00000-00001 arşiv kapağı (Latin), GT'ye girmez.
+  Doldurulan TSV "TSV indir" ile alınır; okunamayan satır `?`, kırmızı not `[kırmızı] …`.
 
 ## Dikkat
 - `requirements.txt` **sürümleri bilerek sabitlenmiş**. Özellikle `scikit-learn==1.8.0`: `models/` altındaki pickle'lar (`2L_NN.sav` vb.) bu sürümle eğitildi. Sürümü yükseltirsen `InconsistentVersionWarning` ve sessizce hatalı tahmin alırsın — yükseltiyorsan modelleri yeniden eğit.
