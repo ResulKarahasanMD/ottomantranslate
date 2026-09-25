@@ -12,6 +12,7 @@ Kullanım:
     lines/NNN.png     satır kırpması (poligon dışı beyaz, kenar payı --pad)
     overlay.jpg       taban çizgileri ve satır numaraları (kontrol için)
 Toplu:
+    pages.tsv         page, mutlak görüntü yolu, genişlik, yükseklik (gt_to_training.py için)
     lines.tsv         page, idx, x0,y0,x1,y1, baseline_px, gt (BOŞ — elle doldurulur)
     sheet.html        her kırpma için RTL metin alanı; tarayıcıda doldurulur,
                       "TSV indir" ile gt sütunu dolu lines.tsv üretir (taslak
@@ -31,8 +32,11 @@ import cv2 as cv
 import numpy as np
 
 
-def segment(kraken, seg_model, img_path, out_json):
-    cmd = [kraken, "-i", img_path, out_json, "segment", "-bl", "-i", seg_model]
+def segment(kraken, seg_model, img_path, out_json, box=False):
+    if box:  # eski kutu segmentasyonu: ikili (siyah/beyaz) görüntü ister; matbu sayfa için
+        cmd = [kraken, "-i", img_path, out_json, "segment", "-x", "-d", "horizontal-rl"]
+    else:
+        cmd = [kraken, "-i", img_path, out_json, "segment", "-bl", "-i", seg_model]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
     if p.returncode != 0 or not os.path.exists(out_json):
         raise RuntimeError(f"kraken segment başarısız: {img_path}\n{p.stderr[-500:]}")
@@ -62,9 +66,10 @@ def main():
     ap.add_argument("--min-baseline", type=int, default=0, help="bundan kısa taban çizgileri atlanır (px); 0 = hepsi")
     ap.add_argument("--short-px", type=int, default=60, help="bundan kısa taban çizgileri sayfada 'kısa' etiketi alır (kırmızı sayı/parça)")
     ap.add_argument("--force", action="store_true", help="mevcut seg.json'u yok say, yeniden segmente et")
+    ap.add_argument("--box", action="store_true", help="baseline yerine eski kutu segmentasyonu (ikili matbu sayfa)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    rows = []
+    rows, pages = [], []
     for img_path in a.images:
         page = os.path.splitext(os.path.basename(img_path))[0]
         pdir = os.path.join(a.out, page)
@@ -74,11 +79,18 @@ def main():
         if os.path.exists(seg_json) and not a.force:
             seg = json.load(open(seg_json, encoding="utf8"))  # önbellek: yeniden segmentasyon yok
         else:
-            seg = segment(a.kraken, a.seg_model, img_path, seg_json)
+            seg = segment(a.kraken, a.seg_model, img_path, seg_json, box=a.box)
         img = cv.imread(img_path)
+        pages.append((page, os.path.abspath(img_path), img.shape[1], img.shape[0]))
         overlay = img.copy()
         kept = 0
         for idx, line in enumerate(seg.get("lines", [])):
+            if line.get("type") == "bbox" or "baseline" not in line:
+                # kutu segmentasyonu: bbox → dikdörtgen poligon + alt kenara yakın taban çizgisi
+                x0, y0, x1, y1 = line["bbox"]
+                line["boundary"] = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+                yb = y1 - max(2, (y1 - y0) // 5)
+                line["baseline"] = [[x0, yb], [x1, yb]]
             bl = np.array(line["baseline"], np.int32)
             length = int(np.sum(np.linalg.norm(np.diff(bl, axis=0), axis=1)))
             if length < a.min_baseline or not line.get("boundary"):
@@ -94,6 +106,10 @@ def main():
         cv.imwrite(os.path.join(pdir, "overlay.jpg"), overlay, [cv.IMWRITE_JPEG_QUALITY, 80])
         print(f"{page}: {len(seg.get('lines', []))} satır bulundu, {kept} kırpıldı, {time.time() - t:.0f}s", flush=True)
 
+    with open(os.path.join(a.out, "pages.tsv"), "w", encoding="utf8") as f:
+        f.write("page\timage\twidth\theight\n")
+        for pg in pages:
+            f.write("\t".join(map(str, pg)) + "\n")
     with open(os.path.join(a.out, "lines.tsv"), "w", encoding="utf8") as f:
         f.write("page\tidx\tx0\ty0\tx1\ty1\tbaseline_px\tshort\timg\tgt\n")
         for r in rows:

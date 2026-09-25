@@ -58,6 +58,13 @@ venv/bin/python -m unittest tests.test_binarize_evaluate -v   # hızlı birim te
   --directory out_20260926_nfs_lines` ile açılır (`.claude/launch.json`: nfs-lines-sheet);
   `file://` ile açılınca kırpmalar yüklenmez. Sayfa 00000-00001 arşiv kapağı (Latin), GT'ye girmez.
   Doldurulan TSV "TSV indir" ile alınır; okunamayan satır `?`, kırmızı not `[kırmızı] …`.
+- **GT → eğitim:** `tools/gt_to_training.py --lines-dir out_20260926_nfs_lines --out out_<tarih>_nfs_train
+  --train` (doldurulmuş `lines.tsv` → PageXML → `ketos train -f page -i ottoman_best --resize union`
+  → `ketos test`). Sayfa bazlı train/val bölmesi; `?` içeren ve `[kırmızı]` satırlar atlanır.
+  **ketos train/test'e `--no-reorder --base-dir R` VERME** (taban doğruluğu %95→%15 düşer);
+  `--base-dir R` yalnız `kraken ocr`'da. Çıktı `model/ft/best_<skor>.safetensors`, `kraken ocr -m`
+  ile doğrudan yüklenir. Sentetik duman testi (24 satır, 20 epoch, CPU 163 s): val karakter
+  doğruluğu %95,07 → %98,45 (`out_20260926_syn_train`, gitignored).
 
 ## Dikkat
 - `requirements.txt` **sürümleri bilerek sabitlenmiş**. Özellikle `scikit-learn==1.8.0`: `models/` altındaki pickle'lar (`2L_NN.sav` vb.) bu sürümle eğitildi. Sürümü yükseltirsen `InconsistentVersionWarning` ve sessizce hatalı tahmin alırsın — yükseltiyorsan modelleri yeniden eğit.
