@@ -2,15 +2,18 @@
 
 import cv2 as cv
 import os
+import sys
 import time
 from tqdm import tqdm
 from glob import glob
 import multiprocessing as mp
-from ocr_utils import run2, init_worker
+from ocr_utils import run2, init_worker, load_model
 from segmentation import extract_words
 from archive_preprocessing import preprocess_archive
 
 model_name = '2L_NN.sav'
+
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def run(file_path, archive_mode=False):
@@ -23,11 +26,17 @@ def run(file_path, archive_mode=False):
     """
     full_image = cv.imread(file_path)
     img_name = os.path.basename(file_path).split('.')[0]
-    predicted_text = ''
 
     if full_image is None:
         print(f"Error: Dosya bulunamadı: {file_path}")
-        return None, None
+        return None, 0, 0, ''
+
+    # Havuz acilmadan once model dogrulanir: yoksa init_worker her worker'da
+    # None doner ve tum kelimeler sessizce bos cikardi.
+    if load_model() is None:
+        print("Error: Eğitilmiş model bulunamadı (models/2L_NN.sav). "
+              "Önce 'Model Eğit' menüsünden model eğitin.")
+        return None, 0, 0, ''
 
     # Arşiv modu: kırmızı mürekkebi temizle ve sütunlara ayır, her bölgeden
     # ayrı ayrı kelime çıkar.
@@ -44,49 +53,50 @@ def run(file_path, archive_mode=False):
 
     if not words:
         print("Error: Kelimeleri ayırmada hata oluştu.")
-        return None, None
+        return None, 0, 0, ''
 
     # Her worker modeli bir kez yükler (init_worker), her kelimede yeniden değil.
     with mp.Pool(mp.cpu_count(), initializer=init_worker) as pool:
         predicted_words = pool.map(run2, words)
 
-    for word in predicted_words:
-        predicted_text += word
-        predicted_text += ' '
+    predicted_text = ' '.join(predicted_words)
+    # Karakter sayisi kelime aralarina eklenen bosluklari icermez.
+    char_count = sum(len(w) for w in predicted_words)
 
-    os.makedirs('output/text', exist_ok=True)
-    with open(f'output/text/{img_name}.txt', 'w', encoding='utf8') as fo:
-        fo.writelines(predicted_text)
+    output_dir = os.path.join(_MODULE_DIR, 'output', 'text')
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, f'{img_name}.txt'), 'w', encoding='utf8') as fo:
+        fo.write(predicted_text)
 
-    return img_name, len(predicted_text), len(words), predicted_text
+    return img_name, char_count, len(words), predicted_text
 
 
 
 if __name__ == "__main__":
-    if not os.path.exists('output'):
-        os.mkdir('output')
-    open('output/running_time.txt', 'w').close()
-
-    destination = 'output/text'
-    if not os.path.exists(destination):
-        os.makedirs(destination)
+    image_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_MODULE_DIR, 'src', 'test')
 
     types = ['png', 'jpg', 'bmp']
     images_paths = []
     for t in types:
-        images_paths.extend(glob(f'src/test/*.{t}'))
+        images_paths.extend(glob(os.path.join(image_dir, f'*.{t}')))
+
+    if not images_paths:
+        print(f"Uyarı: '{image_dir}' altında görüntü bulunamadı. "
+              f"Kullanım: python ocr.py <görüntü_dizini>")
+        sys.exit(1)
 
     before = time.time()
-    running_time = []
-
+    results = []
     for image_path in tqdm(images_paths, total=len(images_paths)):
-        running_time.append(run(image_path))
+        results.append(run(image_path))
 
-    running_time.sort()
-    with open('output/running_time.txt', 'w') as r:
-        for t in running_time:
-            r.writelines(f'image#{t[0]}: {t[1]} characters in {t[2]} words\n')
+    ok = [r for r in results if r[0] is not None]
+    ok.sort(key=lambda r: r[0])
+
+    os.makedirs(os.path.join(_MODULE_DIR, 'output'), exist_ok=True)
+    with open(os.path.join(_MODULE_DIR, 'output', 'running_time.txt'), 'w') as r:
+        for name, char_count, word_count, _ in ok:
+            r.write(f'image#{name}: {char_count} characters in {word_count} words\n')
 
     after = time.time()
-    print(f'total time to finish {len(images_paths)} images:')
-    print(after - before)
+    print(f'{len(ok)}/{len(images_paths)} görüntü işlendi, süre: {after - before:.1f} sn')

@@ -49,6 +49,7 @@ classifiers = [svm.LinearSVC(), MLPClassifier(alpha=1e-4, hidden_layer_sizes=(10
 # Sınıflandırıcı model isimleri
 names = ['LinearSVM', '1L_NN', '2L_NN', 'Gaussian_Naive_Bayes']
 selected_models = []  # Seçilen model isimlerini tutacak liste
+results = []  # Egitilen modellerin (ad, skor) ciftleri
 
 def set_selected_models(models):
     global selected_models
@@ -96,6 +97,11 @@ def bound_box(img_char):
             right = i
             break
         i -= 1
+
+    if top == -1 or left == -1:
+        # Tamamen bos (murekkepsiz) parca: bos dilim cv.resize'da sessiz
+        # karakter kaybina donusuyordu; acik hata cagiranin atlamasini saglar.
+        raise ValueError('bound_box: murekkep icermeyen bos karakter goruntusu')
 
     return img_char[top:down+1, left:right+1]  # Sınırlayıcı kutuyu döndürme
 
@@ -151,12 +157,15 @@ def read_data(limit=4000):
     return X, Y  # Girdi ve etiket verilerini döndürme
 
 
-def train():
-    global scores  # Skorları tutacak değişkeni global olarak tanımla
+def train(selected=None):
+    global scores, results
     skip = [0, 0, 0, 0]  # Tüm modelleri varsayılan olarak eğit
 
-    # Kullanıcı tarafından seçilen modellere göre skip listesini güncelle
+    # Secim parametre olarak da verilebilir; modul-global durum Streamlit
+    # oturumlari arasinda sizdigi icin parametre tercih edilmelidir.
     global selected_models
+    if selected is not None:
+        selected_models = list(selected)
     if "LinearSVM" not in selected_models:
         skip[0] = 1
     if "1L_NN" not in selected_models:
@@ -187,25 +196,26 @@ def train():
     Y_test = np.array(Y_test)
 
     scores = []
+    results = []
+    destination = os.path.join(_MODULE_DIR, 'models')
+    os.makedirs(destination, exist_ok=True)
+
     for idx, clf in tqdm(enumerate(classifiers), desc='Classifiers'):
         if not skip[idx]:  # Belirli modelleri atla
             clf.fit(X_train, Y_train)  # Modeli eğitme
             score = clf.score(X_test, Y_test)  # Test verisi üzerinde doğruluk skoru hesaplama
             scores.append(score)  # Skoru listeye ekle
-            print(score)
+            # Skor, adiyla birlikte saklanir: names ile zip'lemek model
+            # secimi yapildiginda skorlari yanlis modele kaydiriyordu.
+            results.append((names[idx], score))
+            print(names[idx], score)
 
-
-            # Modeli kaydetme
-            destination = f'models'
-            if not os.path.exists(destination):
-                os.makedirs(destination)
-
-            location = f'models/{names[idx]}.sav'
+            location = os.path.join(destination, f'{names[idx]}.sav')
             pickle.dump(clf, open(location, 'wb'))
 
-    with open('models/report.txt', 'w') as fo:
-        for score, name in zip(scores, names):
-            fo.writelines(f'Score of {name}: {score}\n')
+    with open(os.path.join(destination, 'report.txt'), 'w') as fo:
+        for name, score in results:
+            fo.write(f'Score of {name}: {score}\n')
 
 
 if __name__ == "__main__":

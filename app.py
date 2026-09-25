@@ -101,8 +101,11 @@ if menu_group == "OCR Yap":
         file_name = uploaded_file.name
         st.write(f"Yüklenen dosya adı: {file_name}")
 
-        os.makedirs('test', exist_ok=True)
-        temp_file = os.path.join('test', file_name)
+        # Depodaki test/ kaynak dizinine degil gecici dizine yazilir: ad
+        # cakismasi repo dosyasini ezmesin, es-zamanli kullanicilar
+        # birbirinin dosyasini bozmasin.
+        upload_dir = tempfile.mkdtemp(prefix="ocr_upload_")
+        temp_file = os.path.join(upload_dir, os.path.basename(file_name))
         with open(temp_file, "wb") as f:
             f.write(uploaded_file.read())
 
@@ -144,9 +147,29 @@ if menu_group == "OCR Yap":
                          height=200, key="ocr_result_arabic")
 
             if st.button("Çevir"):
+                # NOT: Osmanlica Arapca degildir; ar->tr makine cevirisi
+                # gecici bir yardimcidir, dogru cozum transliterasyon
+                # katmanidir. from_lang verilmedigi surumde kutuphane
+                # kaynagi 'en' varsayip anlamsiz sonuc uretiyordu.
                 with st.spinner("Çeviri işlemi devam ediyor..."):
-                    translator = Translator(to_lang="tr")
-                    translated_text = translator.translate(ocr_result_arabic)
+                    translator = Translator(from_lang="ar", to_lang="tr")
+                    # MyMemory tek istekte ~500 karakterle sinirli: metin
+                    # kelime sinirlarindan parcalanip sirayla cevrilir.
+                    chunks, current = [], ""
+                    for word in ocr_result_arabic.split():
+                        if len(current) + len(word) + 1 > 450:
+                            chunks.append(current)
+                            current = word
+                        else:
+                            current = f"{current} {word}".strip()
+                    if current:
+                        chunks.append(current)
+                    try:
+                        translated_text = " ".join(
+                            translator.translate(c) for c in chunks)
+                    except Exception as e:
+                        st.error(f"Çeviri servisi hatası: {e}")
+                        st.stop()
 
                 encoded_text = urllib.parse.quote(translated_text)
                 st.success("Çeviri işlemi tamamlandı!")
@@ -225,18 +248,18 @@ if menu_group == "Model Eğit":
 
     # Model eğitimine başlamak için düğmeye basıldığında
     if st.button("Model Eğitimine Başla"):
-        st.spinner("Model eğitimi devam ediyor...")
-        train.train()  # train.py dosyasındaki train fonksiyonunu çağırarak model eğitimini başlat
+        with st.spinner("Model eğitimi devam ediyor..."):
+            train.train(selected_models)
 
         st.success("Model eğitimi tamamlandı!")
 
-        # Eğitim tamamlandıktan sonra oluşturulan modellerin isimlerini, skorlarını ve indirme bağlantılarını göster
+        # Yalniz gercekten egitilen modeller kendi skorlariyla gosterilir
+        # (train.names ile zip'lemek, secim yapildiginda skorlari yanlis
+        # modele kaydiriyordu).
         st.subheader("Oluşturulan Modeller ve Skorlar:")
-        for model_name, score in zip(train.names, train.scores):
+        for model_name, score in train.results:
             st.write(f"- **{model_name}** - Skor: {score:.2f}")
-            # Modelin indirme bağlantısını oluştur ve kullanıcıya göster
-            model_link = f"[İndir: {model_name} Model](models/{model_name}.sav)"
-            st.markdown(model_link, unsafe_allow_html=True)
+            st.caption(f"Kaydedildi: models/{model_name}.sav")
 
 elif menu_group == "Neural Machine Translation":
     nmt_menu = st.sidebar.radio("Neural Machine Translation", [
@@ -276,11 +299,15 @@ elif menu_group == "Neural Machine Translation":
         # API endpoint URL
         api_url = "http://localhost/ottoman/api/api.php?action=get_data"
 
-        # API'den veri çekme
-        response = requests.get(api_url)
-
-        # API'den gelen JSON verisini Python sözlüğüne çevirme
-        data = response.json()
+        # API'den veri çekme (PHP servisi kapaliysa sayfa traceback ile
+        # cokmesin diye korunur)
+        try:
+            response = requests.get(api_url, timeout=5)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            st.error(f"Veri API'sine ulaşılamadı ({api_url}): {e}")
+            st.stop()
         # Toplam kayıt sayısını al
         total_records = data.get("total_records", 0)
         # Toplam kayıt sayısını gösterme
@@ -347,21 +374,20 @@ elif menu_group == "Neural Machine Translation":
                 st.error("API'den veri alınamadı. Lütfen tekrar deneyin.")
 
         if col3.button("SRC Val"):
-            # Dosya yolu belirleme
-            turkish_texts = [entry["turkish_translation"]
-                             for entry in data["data"]]  # Türkçe metinlerini al
+            # SRC = kaynak dil (Osmanlica). Onceki surum buraya Turkce
+            # ceviriyi yaziyordu; NMT dogrulama verisi sessizce bozuluyordu.
             file_path = os.path.join("..", "nmtData", "src-val.txt")
             response = requests.post(
                 api_url, data={"action": "get_data"})  # POST isteği gönder
 
             if response.status_code == 200:
                 data = response.json()  # JSON verisini al
-                turkish_texts = [entry["turkish_translation"]
-                                 for entry in data["data"]]  # Türkçe metinlerini al
+                ottoman_texts = [entry["ottoman_text"]
+                                 for entry in data["data"]]  # Osmanlıca metinleri al
 
                 # Dosyayı belirtilen yola yazma
                 with open(file_path, "w", encoding="utf-8") as file:
-                    file.write(" ".join(turkish_texts))  # Verileri dosyaya yaz
+                    file.write(" ".join(ottoman_texts))  # Verileri dosyaya yaz
 
                 st.success(
                     f"Veriler başarıyla '{file_path}' dosyasına kaydedildi.")
@@ -431,12 +457,15 @@ elif menu_group == "Neural Machine Translation":
     elif nmt_menu == "NMT Model Oluştur":
         st.header("NMT Model Oluştur")
         nmt_folder = "nmt"  # YAML dosyalarının bulunduğu klasörün adı
+        # Dosya adlari diskteki gercek uzantilarla eslesir (yalniz easy
+        # .yaml, digerleri .yml): yanlis uzanti 5 secenegin 4'unu
+        # FileNotFoundError ile calismaz yapiyordu.
         model_types = {
             "Basit Ayarlarla Model Oluştur": "easy.yaml",
-            "CPU Kullanarak Oluştur": "config-cpu.yaml",
-            "Özet Oluştur": "config-rnn-summarization.yaml",
-            "1 GPU Kullanarak Oluştur": "config-transformer-base-1GPU.yaml",
-            "4 GPU Kullanarak Oluştur": "config-transformer-base-4GPU.yaml"
+            "CPU Kullanarak Oluştur": "config-cpu.yml",
+            "Özet Oluştur": "config-rnn-summarization.yml",
+            "1 GPU Kullanarak Oluştur": "config-transformer-base-1GPU.yml",
+            "4 GPU Kullanarak Oluştur": "config-transformer-base-4GPU.yml"
         }
         selected_model_name = st.selectbox("Model Türünü Seçin", list(model_types.keys()), index=0)  # Model isimlerinin listesi
         selected_model_filename = model_types[selected_model_name]  # Seçilen modelin dosya adı

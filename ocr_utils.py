@@ -8,6 +8,10 @@ import pickle
 
 model_name = '2L_NN.sav'
 
+# Model yolu calisma dizininden bagimsizdir: streamlit repo koku disindan
+# baslatildiginda da ayni model bulunur.
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Geçerli tahmin edilebilecek sınıflar (çok karakterli 'لا' ve noktalama '،' dahil)
 _VALID_CHAR_SET = set(VALID_CHARS)
 
@@ -16,17 +20,24 @@ _MODEL = None
 
 
 def load_model():
-    location = 'models'
-    if os.path.exists(location):
-        model = pickle.load(open(f'models/{model_name}', 'rb'))
-        return model
+    # Dizin degil dosya kontrolu: dizin var ama .sav yokken pickle.load'un
+    # FileNotFoundError'i init_worker'i olduruyor ve mp.Pool sonsuz worker
+    # dongusunde kilitleniyordu.
+    model_path = os.path.join(_MODULE_DIR, 'models', model_name)
+    if os.path.isfile(model_path):
+        with open(model_path, 'rb') as f:
+            return pickle.load(f)
     return None
 
 
 def init_worker():
     """multiprocessing.Pool başlatıcısı: her worker modeli bir kez yükler."""
     global _MODEL
-    _MODEL = load_model()
+    try:
+        _MODEL = load_model()
+    except Exception as e:
+        print(f"Model yüklenemedi: {e}")
+        _MODEL = None
 
 
 def _get_model():

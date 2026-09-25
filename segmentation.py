@@ -66,7 +66,16 @@ def projection_segmentation(clean_img, axis, cut=3):
                     segments.append(clean_img[:, max(start-1, 0):idx])
                 cnt = 0
                 start = -1
-    
+
+    # Murekkep goruntunun kenarina kadar uzaniyorsa dongudeki flush hic
+    # tetiklenmez; son segment (en alt satir / RTL'de satirin ilk kelimesi)
+    # burada eklenir.
+    if start != -1:
+        if axis == 'horizontal':
+            segments.append(clean_img[max(start-1, 0):, :])
+        elif axis == 'vertical':
+            segments.append(clean_img[:, max(start-1, 0):])
+
     return segments
 
 

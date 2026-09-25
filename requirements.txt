@@ -17,5 +17,10 @@ PyArabic==0.6.15
 streamlit==1.58.0
 
 # Neural Machine Translation (opsiyonel — NMT menüsü için)
-OpenNMT-py==3.5.1
-torch==2.2.2
+# DIKKAT: Bu iki pin yukaridaki numpy==2.4.6 ile CELISIR: torch 2.2.x
+# numpy 2.x ile uyumsuzdur (numpy<2 ister) ve OpenNMT-py projesi terk
+# edilmistir. Kurulum bu satirlar acikken cozulemez; NMT hattina donulecegi
+# gun ya numpy<2'ye inilmeli ya OpenNMT-py yerine modern bir sey (HF
+# transformers/ctranslate2) + guncel torch secilmelidir.
+# OpenNMT-py==3.5.1
+# torch==2.2.2

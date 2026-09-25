@@ -1,6 +1,8 @@
 import numpy as np  # NumPy kütüphanesi
 import cv2 as cv  # OpenCV kütüphanesi
-from scipy.ndimage import interpolation as inter  # SciPy'nin interpolation modülü
+# scipy.ndimage.interpolation alt modulu SciPy 1.10'da kaldirildi; rotate
+# artik dogrudan scipy.ndimage'dan gelir.
+from scipy.ndimage import rotate as ndi_rotate
 from PIL import Image as im  # PIL kütüphanesi
 
 
@@ -45,7 +47,7 @@ def find_score(arr, angle):
     Returns:
         numpy.ndarray: Histogram.
         float: Skor."""
-    data = inter.rotate(arr, angle, reshape=False, order=0)
+    data = ndi_rotate(arr, angle, reshape=False, order=0)
     hist = np.sum(data, axis=1)
     score = np.sum((hist[1:] - hist[:-1]) ** 2)
     return hist, score
@@ -80,7 +82,7 @@ def deskew(binary_img):
     # print('Best angle: {}'.formate(best_angle))
 
     # Doğrultma işlemini gerçekleştirme
-    data = inter.rotate(bin_img, best_angle, reshape=False, order=0)
+    data = ndi_rotate(bin_img, best_angle, reshape=False, order=0)
     img = im.fromarray((255 * data).astype("uint8"))
 
     # img.save('skew_corrected.png')
