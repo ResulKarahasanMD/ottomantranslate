@@ -18,8 +18,8 @@ streamlit run app.py
 ```
 
 ## Dikkat
-- `requirements.txt` **sürümleri bilerek sabitlenmiş**. Özellikle `scikit-learn==1.8.0`: `htr_models/` ve `models/` altındaki pickle'lar bu sürümle eğitildi. Sürümü yükseltirsen `InconsistentVersionWarning` ve sessizce hatalı tahmin alırsın — yükseltiyorsan modelleri yeniden eğit.
-- `Dataset/`, `htr_models/`, `models/` ham veri ve eğitilmiş ağırlık: **değiştirme, silme.** Dizin 7.2 GB, disk dar.
+- `requirements.txt` **sürümleri bilerek sabitlenmiş**. Özellikle `scikit-learn==1.8.0`: `models/` altındaki pickle'lar (`2L_NN.sav` vb.) bu sürümle eğitildi. Sürümü yükseltirsen `InconsistentVersionWarning` ve sessizce hatalı tahmin alırsın — yükseltiyorsan modelleri yeniden eğit.
+- `Dataset/`, `htr_models/`, `models/` ham veri ve eğitilmiş ağırlık: **değiştirme, silme.** Boyut (2026-09-25 ölçümü): proje 317 MB, ayrıca `venv/` 641 MB ve `.git` 50 MB. `htr_models/`'in 178 MB'ı NFS.d. 12369 kırpma PNG'leri; GGUF HTR modelleri (4,4 GB) 2026-08-23'te silindi, eski "7.2 GB" o dönemin ölçümüydü.
 - Aktif dal `fix/ocr-robustness-and-archive-mode`. Upstream başka birine ait; push etmeden önce sor.
 - OCR kalitesini smoothing/crop ile "iyileştirip" hatayı gizleme — hatalı tanınan karakteri raporla.
 - Transliterasyon/çeviri çıktısında uydurma kelime tamamlama yapma; okunamayanı okunamadı olarak işaretle.
