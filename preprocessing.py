@@ -36,6 +36,95 @@ def binary_otsus(image, filter:int=1):
     return binary_img
 
 
+# Desteklenen ikilileştirme yöntemleri (segmentation.preprocess ve ocr.run
+# tarafından paylaşılır).
+BINARIZATION_METHODS = ("otsu", "sauvola")
+
+
+def binary_sauvola(gray_img, window_size: int = 31, k: float = 0.3,
+                   min_area: int = None):
+    """Sauvola yerel eşikleme ile ikilileştirir.
+
+    Otsu tek bir global eşik seçer; sararmış, lekeli veya düzensiz aydınlatılmış
+    arşiv sayfalarında bu eşik ya lekeleri metin sayar ya da soluk vuruşları
+    yutar. Sauvola her piksel için komşuluğun ortalama ve standart sapmasından
+    ayrı bir eşik hesaplar: T = m * (1 + k * (s / R - 1)).
+
+    Args:
+        gray_img (numpy.ndarray): Koyu metin / açık zemin gri görüntü
+            (ters ÇEVRİLMEMİŞ). Renkli verilirse griye çevrilir.
+        window_size (int): Yerel pencere kenarı (tek sayı olmalı; çift
+            verilirse 1 artırılır). Vuruş kalınlığının ~3-5 katı iyi çalışır.
+        k (float): Sauvola k parametresi (0.2-0.5 tipik). Büyük k daha az
+            piksel'i metin sayar (daha ince/temiz), küçük k daha fazlasını.
+            Varsayılan 0.3, sentetik bozulma taramasında (2026-09-26) tüm
+            koşullarda satır sayısını koruyan en küçük değerdi; 0.2 gürültüyü
+            metin sayıyor, 0.5 soluk vuruşları parçalıyordu.
+        min_area (int): Bu piksel alanından küçük bağlı bileşenler (speckle)
+            atılır. None ise (window_size // 8) ** 2, en az 4 px. Harf
+            noktalarından küçük kalmalıdır; düşük çözünürlükte küçültün.
+
+    Returns:
+        numpy.ndarray: uint8 ikili görüntü; metin 255 (beyaz), zemin 0.
+            Polarite binary_otsus(ters çevrilmiş gri) ile aynıdır, böylece
+            segmentasyon hattına doğrudan verilebilir.
+    """
+    # skimage yalnızca burada gerekir; modül import'unu ağırlaştırmamak için
+    # fonksiyon içinde alınır.
+    from skimage.filters import threshold_sauvola
+
+    if len(gray_img.shape) == 3:
+        gray_img = cv.cvtColor(gray_img, cv.COLOR_BGR2GRAY)
+
+    window_size = int(window_size)
+    if window_size < 3:
+        window_size = 3
+    if window_size % 2 == 0:
+        window_size += 1
+
+    thresh = threshold_sauvola(gray_img, window_size=window_size, k=k)
+    # Koyu metin: yerel eşiğin altındaki pikseller mürekkeptir.
+    binary = (gray_img < thresh).astype(np.uint8) * 255
+
+    # Speckle temizliği: yerel eşik gürültülü düz zeminde tek tük piksel
+    # üretir; bunlar projeksiyon segmentasyonunda sahte satır/kelime olur.
+    if min_area is None:
+        min_area = max(4, (window_size // 8) ** 2)
+    if min_area > 0:
+        n, labels, stats, _ = cv.connectedComponentsWithStats(binary, connectivity=8)
+        if n > 1:
+            keep = np.zeros(n, dtype=bool)
+            keep[1:] = stats[1:, cv.CC_STAT_AREA] >= min_area
+            binary = keep[labels].astype(np.uint8) * 255
+    return binary
+
+
+def binarize(gray_img, method: str = "otsu", **kwargs):
+    """Yöntem adına göre ikilileştirme uygular.
+
+    Args:
+        gray_img (numpy.ndarray): Koyu metin / açık zemin gri görüntü.
+        method (str): 'otsu' veya 'sauvola'.
+        **kwargs: Yönteme özel parametreler (sauvola: window_size, k).
+
+    Returns:
+        numpy.ndarray: uint8 ikili görüntü, metin 255 / zemin 0.
+    """
+    method = (method or "otsu").lower()
+    if method == "otsu":
+        # Mevcut hat: griyi ters çevirip Otsu; metin beyaz kalır.
+        inverted = cv.bitwise_not(gray_img)
+        return binary_otsus(inverted, kwargs.get("filter", 0))
+    if method == "sauvola":
+        return binary_sauvola(gray_img,
+                              window_size=kwargs.get("window_size", 31),
+                              k=kwargs.get("k", 0.3),
+                              min_area=kwargs.get("min_area"))
+    raise ValueError(
+        f"Bilinmeyen ikilileştirme yöntemi: {method!r}; "
+        f"geçerli: {BINARIZATION_METHODS}")
+
+
 def find_score(arr, angle):
 
     """Belirtilen açıda döndürülmüş görüntünün skorunu hesaplar.

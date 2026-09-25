@@ -97,6 +97,27 @@ if menu_group == "OCR Yap":
         help="BOA/nüfus defteri gibi kırmızı düzeltmeli, çok sütunlu belgeler için."
     )
 
+    # İkilileştirme: Otsu tek global eşik (temiz taramalar); Sauvola yerel
+    # eşik (sararmış, lekeli, düzensiz aydınlatılmış arşiv sayfaları).
+    binarization = st.selectbox(
+        "İkilileştirme yöntemi",
+        options=["otsu", "sauvola"],
+        index=0,
+        help="Otsu: temiz, düz zeminli taramalar. Sauvola: leke/gölge/sararma "
+             "olan arşiv belgeleri; her piksel için yerel eşik hesaplar."
+    )
+    bin_kwargs = {}
+    if binarization == "sauvola":
+        col1, col2 = st.columns(2)
+        with col1:
+            bin_kwargs["window_size"] = st.slider(
+                "Sauvola pencere (px)", min_value=9, max_value=101, value=31, step=2,
+                help="Vuruş kalınlığının ~3-5 katı iyi çalışır.")
+        with col2:
+            bin_kwargs["k"] = st.slider(
+                "Sauvola k", min_value=0.05, max_value=0.6, value=0.3, step=0.05,
+                help="Büyük k daha az pikseli metin sayar.")
+
     if uploaded_file is not None:
         file_name = uploaded_file.name
         st.write(f"Yüklenen dosya adı: {file_name}")
@@ -111,7 +132,8 @@ if menu_group == "OCR Yap":
 
         if st.button("OCR İşlemi Başlat"):
             with st.spinner("OCR işlemi devam ediyor..."):
-                result = run(temp_file, archive_mode=archive_mode)
+                result = run(temp_file, archive_mode=archive_mode,
+                             binarization=binarization, **bin_kwargs)
 
             # Temp dosyayı OCR bittikten sonra temizle
             if os.path.exists(temp_file):

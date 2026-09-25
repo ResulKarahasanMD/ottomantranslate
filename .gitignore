@@ -164,3 +164,9 @@ cython_debug/
 # HTR POC model dosyalari (buyuk, versiyonlanmaz)
 htr_models/*.gguf
 htr_models/*.png
+
+# Değerlendirme çıktıları ve üretilen sentetik sayfalar (tools/ ile yeniden üretilir)
+out_*/
+evaluation/synthetic_clean/
+evaluation/synthetic/
+tools/render_lines

@@ -1,26 +1,31 @@
 import numpy as np  # NumPy kütüphanesi
 import cv2 as cv  # OpenCV kütüphanesi
-from preprocessing import binary_otsus, deskew  # preprocessing.py
+from preprocessing import binarize, deskew  # preprocessing.py
 from utilities import projection, save_image  # utilities.py
 from glob import glob  # Glob modülü, dosya aramak için kullanılır.
 
 
 
-def preprocess(image):
+def preprocess(image, binarization: str = "otsu", **bin_kwargs):
 
     """    Görüntüyü ön işleme adımlarını uygulayan fonksiyon.
 
     Args:
-        image (numpy.ndarray): Giriş görüntü.
+        image (numpy.ndarray): Giriş görüntü (BGR veya gri).
+        binarization (str): 'otsu' (global, varsayılan) veya 'sauvola'
+            (yerel; lekeli/düzensiz aydınlatılmış arşiv sayfaları için).
+        **bin_kwargs: Yönteme özel parametreler (bkz. preprocessing.binarize).
 
     Returns:
-        numpy.ndarray: Ön işlemden geçirilmiş görüntü."""
-    # Gri tonlamalı görüntüyü elde etme ve ters çevirme
-    gray_img = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    gray_img = cv.bitwise_not(gray_img)
+        numpy.ndarray: Ön işlemden geçirilmiş görüntü (metin 255, zemin 0)."""
+    # Gri tonlamalı görüntüyü elde etme
+    if len(image.shape) == 3:
+        gray_img = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    else:
+        gray_img = image
 
-    # Otsu'nun ikili dönüşümünü uygulama
-    binary_img = binary_otsus(gray_img, 0)
+    # İkilileştirme (metin beyaz / zemin siyah polaritesi korunur)
+    binary_img = binarize(gray_img, binarization, **bin_kwargs)
     # cv.imwrite('origin.png', gray_img)
 
      # Görüntüyü doğrultma işlemi
@@ -81,19 +86,21 @@ def projection_segmentation(clean_img, axis, cut=3):
 
 # Line Segmentation
 
-def line_horizontal_projection(image, cut=3):
+def line_horizontal_projection(image, cut=3, binarization="otsu", **bin_kwargs):
 
     """Yatay iz düşüm tabanlı satır segmentasyonu uygular.
 
     Args:
         image (numpy.ndarray): Giriş görüntü.
         cut (int): Kesme eşiği.
+        binarization (str): İkilileştirme yöntemi ('otsu' | 'sauvola').
+        **bin_kwargs: Yönteme özel parametreler.
 
     Returns:
         list: Satırların listesi."""
     
     # Giriş görüntüsünü ön işleme tabi tutma
-    clean_img = preprocess(image)
+    clean_img = preprocess(image, binarization, **bin_kwargs)
 
 
     # Segmentasyon   
@@ -121,18 +128,20 @@ def word_vertical_projection(line_image, cut=3):
     return line_words
 
 
-def extract_words(img, visual=0):
+def extract_words(img, visual=0, binarization="otsu", **bin_kwargs):
 
     """Görüntüden kelimeleri çıkaran fonksiyon.
 
     Args:
         img (numpy.ndarray): Giriş görüntü.
         visual (int): Görüntü işleme sonuçlarını görselleştirme modu.
+        binarization (str): İkilileştirme yöntemi ('otsu' | 'sauvola').
+        **bin_kwargs: Yönteme özel parametreler (sauvola: window_size, k).
 
     Returns:
         list: (Kelime, Satır) çiftlerinin listesi."""
 
-    lines = line_horizontal_projection(img)
+    lines = line_horizontal_projection(img, binarization=binarization, **bin_kwargs)
     words = []
     
     for idx, line in enumerate(lines):
