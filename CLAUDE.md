@@ -39,6 +39,20 @@ venv/bin/python -m unittest tests.test_binarize_evaluate -v   # hızlı birim te
   ```
   `evaluate.py` dosyadan çalıştırılır (heredoc/stdin ile multiprocessing spawn tuzağı).
 
+## kraken (ayrı venv, 2026-09-26)
+- Kurulum: `~/projects/venvs/kraken` (uv, py3.12, kraken 7.1.1, torch 2.14 MPS). Modeller
+  `~/projects/venvs/kraken_models/`: `ottoman_best.mlmodel` ve `arabic_best.mlmodel`
+  (OpenITI Printed Base, zenodo 7050342 / 7050296), `seg_general.mlmodel` (çok yazılı
+  baseline segmentasyonu, zenodo 14602569). Depo dışı; `kraken get <DOI>` ile yeniden iner.
+- **Şart:** `ocr --base-dir R`; varsayılan BiDi yeniden sıralama çıktıyı tersine çevirir.
+  Model Farsça ک/ی üretir; CER öncesi ك/ي'ye normalize edilir (`tools/kraken_eval.py`).
+- Matbu/sentetik sayfa: **Sauvola ön-ikili → `segment -x -d horizontal-rl` (kutu) → ocr**
+  micro CER 0,016 (10 sayfa); kraken'in kendi nlbin'i 0,229 (düşük kontrastta çöker);
+  ham gri + blla baseline 0,830 (satırları parçalıyor). Rapor `evaluation/kraken_2026-09-26.md`.
+- El yazısı NFS sayfası: `seg_general` taban çizgileri iyi (138 satır, kırmızı sayılar
+  atlanıyor), ama Printed Ottoman modeli metni okuyamıyor; el yazısı için satır GT + ince
+  ayar gerekir (`ketos train`).
+
 ## Dikkat
 - `requirements.txt` **sürümleri bilerek sabitlenmiş**. Özellikle `scikit-learn==1.8.0`: `models/` altındaki pickle'lar (`2L_NN.sav` vb.) bu sürümle eğitildi. Sürümü yükseltirsen `InconsistentVersionWarning` ve sessizce hatalı tahmin alırsın — yükseltiyorsan modelleri yeniden eğit.
 - `Dataset/`, `htr_models/`, `models/` ham veri ve eğitilmiş ağırlık: **değiştirme, silme.** Boyut (2026-09-25 ölçümü): proje 317 MB, ayrıca `venv/` 641 MB ve `.git` 50 MB. `htr_models/`'in 178 MB'ı NFS.d. 12369 kırpma PNG'leri; GGUF HTR modelleri (4,4 GB) 2026-08-23'te silindi, eski "7.2 GB" o dönemin ölçümüydü.
