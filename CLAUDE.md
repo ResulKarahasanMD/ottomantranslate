@@ -47,7 +47,7 @@ venv/bin/python -m unittest tests.test_binarize_evaluate -v   # hızlı birim te
 - **Şart:** `ocr --base-dir R`; varsayılan BiDi yeniden sıralama çıktıyı tersine çevirir.
   Model Farsça ک/ی üretir; CER öncesi ك/ي'ye normalize edilir (`tools/kraken_eval.py`).
 - Matbu/sentetik sayfa: **Sauvola ön-ikili → `segment -x -d horizontal-rl` (kutu) → ocr**
-  micro CER 0,016 (10 sayfa); kraken'in kendi nlbin'i 0,229 (düşük kontrastta çöker);
+  micro CER 0,017 (10 sayfa); kraken'in kendi nlbin'i 0,253 (düşük kontrastta çöker);
   ham gri + blla baseline 0,830 (satırları parçalıyor). Rapor `evaluation/kraken_2026-09-26.md`.
 - El yazısı NFS sayfası: `seg_general` taban çizgileri iyi (138 satır, kırmızı sayılar
   atlanıyor), ama Printed Ottoman modeli metni okuyamıyor; el yazısı için satır GT + ince

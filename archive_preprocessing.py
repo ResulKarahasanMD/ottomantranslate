@@ -143,14 +143,17 @@ def preprocess_archive(bgr_image, do_split=True):
         do_split (bool): True ise sütunlara ayrılmış bölge görüntüleri döner.
 
     Returns:
-        list[numpy.ndarray]: İşlenmiş bölge görüntülerinin listesi (BGR).
-            Bölme kapalıysa tek elemanlı liste döner.
+        list[numpy.ndarray]: İşlenmiş bölge görüntülerinin listesi (BGR),
+            belge okuma sırasında (en sağdaki sütun önce). Bölme kapalıysa
+            tek elemanlı liste döner.
     """
     cleaned = remove_red_ink(bgr_image)
     if not do_split:
         return [cleaned]
 
+    # split_columns sütunları soldan sağa verir; Osmanlıca/Arapça belgede
+    # okuma sırası sağdan sola olduğu için bölgeler ters çevrilerek döndürülür.
     regions = []
-    for (x0, x1) in split_columns(cleaned):
+    for (x0, x1) in reversed(split_columns(cleaned)):
         regions.append(cleaned[:, x0:x1])
     return regions if regions else [cleaned]

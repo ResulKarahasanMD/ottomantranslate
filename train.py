@@ -48,7 +48,8 @@ classifiers = [svm.LinearSVC(), MLPClassifier(alpha=1e-4, hidden_layer_sizes=(10
 
 # Sınıflandırıcı model isimleri
 names = ['LinearSVM', '1L_NN', '2L_NN', 'Gaussian_Naive_Bayes']
-selected_models = []  # Seçilen model isimlerini tutacak liste
+ALL_MODELS = ["LinearSVM", "1L_NN", "2L_NN", "Gaussian_Naive_Bayes"]
+selected_models = []  # Seçilen model isimlerini tutacak liste (boş = hepsi)
 results = []  # Egitilen modellerin (ad, skor) ciftleri
 
 def set_selected_models(models):
@@ -166,6 +167,10 @@ def train(selected=None):
     global selected_models
     if selected is not None:
         selected_models = list(selected)
+    # Açık seçim yoksa (parametre None ve global boş) varsayılan davranış:
+    # tüm modeller eğitilir. Boş seçim hepsini atlayıp boş rapor yazmasın.
+    if not selected_models:
+        selected_models = list(ALL_MODELS)
     if "LinearSVM" not in selected_models:
         skip[0] = 1
     if "1L_NN" not in selected_models:

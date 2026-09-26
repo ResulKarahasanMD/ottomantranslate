@@ -79,8 +79,9 @@ def main(src, dst, seed=20260926):
         stem = os.path.splitext(os.path.basename(p))[0]
         gt = os.path.join(src, stem + ".gt.txt")
         gray = _gray(cv.imread(p))
-        for name, fn in VARIANTS.items():
-            rng = np.random.default_rng(seed + hash(name) % 1000)
+        for vi, (name, fn) in enumerate(VARIANTS.items()):
+            # hash(str) süreçler arası rastgele (PYTHONHASHSEED); varyant sırası kararlı
+            rng = np.random.default_rng(seed + vi)
             out = fn(gray, rng)
             out_bgr = cv.cvtColor(out, cv.COLOR_GRAY2BGR)
             cv.imwrite(os.path.join(dst, f"{stem}_{name}.png"), out_bgr)

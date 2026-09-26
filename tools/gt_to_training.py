@@ -158,11 +158,15 @@ def main():
     log.write(p.stdout + p.stderr)
     print(f"ketos train bitti: rc={p.returncode} {time.time() - t:.0f}s; son satırlar:")
     print("\n".join((p.stdout + p.stderr).strip().splitlines()[-6:]))
+    if p.returncode != 0:
+        # Eski bir best_*.safetensors varsa onu yeni ince ayar diye test etme.
+        raise SystemExit(f"ketos train başarısız (rc={p.returncode}); bkz. {a.out}/train.log")
     ft_dir = os.path.join(model_dir, "ft")
-    cands = sorted(glob.glob(os.path.join(ft_dir, "best_*.safetensors")) + glob.glob(os.path.join(ft_dir, "*best*.mlmodel")))
+    cands = [c for c in glob.glob(os.path.join(ft_dir, "best_*.safetensors")) + glob.glob(os.path.join(ft_dir, "*best*.mlmodel"))
+             if os.path.getmtime(c) >= t]  # yalnız bu koşuda yazılanlar
     if not cands:
-        raise SystemExit(f"en iyi model bulunamadı ({ft_dir}); bkz. {a.out}/train.log")
-    best = cands[-1]
+        raise SystemExit(f"bu koşuda en iyi model üretilmedi ({ft_dir}); bkz. {a.out}/train.log")
+    best = max(cands, key=os.path.getmtime)
     print("en iyi model:", best)
     for label, m in (("taban", a.base_model), ("ince-ayar", best)):
         cmd = [c if c != "<model>" else m for c in cmd_test]

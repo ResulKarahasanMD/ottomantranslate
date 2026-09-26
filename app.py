@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import shutil
 import tempfile
 from ocr import run
 from ottomanDataset import prepare_dataset
@@ -122,22 +123,29 @@ if menu_group == "OCR Yap":
         file_name = uploaded_file.name
         st.write(f"Yüklenen dosya adı: {file_name}")
 
-        # Depodaki test/ kaynak dizinine degil gecici dizine yazilir: ad
-        # cakismasi repo dosyasini ezmesin, es-zamanli kullanicilar
-        # birbirinin dosyasini bozmasin.
-        upload_dir = tempfile.mkdtemp(prefix="ocr_upload_")
-        temp_file = os.path.join(upload_dir, os.path.basename(file_name))
-        with open(temp_file, "wb") as f:
-            f.write(uploaded_file.read())
+        # Yüklemenin kararlı kimliği: OCR sonucu bu kimliğe bağlanır; başka
+        # dosya seçilince önceki sonuç gösterilmez ve temizlenir.
+        upload_id = getattr(uploaded_file, "file_id", None) or f"{file_name}:{uploaded_file.size}"
+        if st.session_state.get("ocr_upload_id") != upload_id:
+            for k in ("ocr_done", "ocr_text", "ocr_meta"):
+                st.session_state.pop(k, None)
+            st.session_state["ocr_upload_id"] = upload_id
 
         if st.button("OCR İşlemi Başlat"):
-            with st.spinner("OCR işlemi devam ediyor..."):
-                result = run(temp_file, archive_mode=archive_mode,
-                             binarization=binarization, **bin_kwargs)
-
-            # Temp dosyayı OCR bittikten sonra temizle
-            if os.path.exists(temp_file):
-                os.unlink(temp_file)
+            # Depodaki test/ kaynak dizinine degil gecici dizine yazilir: ad
+            # cakismasi repo dosyasini ezmesin, es-zamanli kullanicilar
+            # birbirinin dosyasini bozmasin. Dizin yalnız OCR süresince yaşar
+            # ve hata yolunda da silinir.
+            upload_dir = tempfile.mkdtemp(prefix="ocr_upload_")
+            try:
+                temp_file = os.path.join(upload_dir, os.path.basename(file_name))
+                with open(temp_file, "wb") as f:
+                    f.write(uploaded_file.getvalue())
+                with st.spinner("OCR işlemi devam ediyor..."):
+                    result = run(temp_file, archive_mode=archive_mode,
+                                 binarization=binarization, **bin_kwargs)
+            finally:
+                shutil.rmtree(upload_dir, ignore_errors=True)
 
             if result is None or result[0] is None:
                 st.error(
@@ -154,8 +162,9 @@ if menu_group == "OCR Yap":
             st.session_state["ocr_text"] = ocr_result_arabic
             st.session_state["ocr_meta"] = (img_name, character_count, word_count)
 
-        # OCR sonucu session_state'te varsa göster (rerun'dan bağımsız)
-        if st.session_state.get("ocr_done"):
+        # OCR sonucu session_state'te varsa ve bu yüklemeye aitse göster
+        # (rerun'dan bağımsız)
+        if st.session_state.get("ocr_done") and st.session_state.get("ocr_upload_id") == upload_id:
             img_name, character_count, word_count = st.session_state["ocr_meta"]
             ocr_result_arabic = st.session_state["ocr_text"]
 

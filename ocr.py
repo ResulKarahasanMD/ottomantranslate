@@ -19,6 +19,23 @@ model_name = '2L_NN.sav'
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _kill_executor(ex):
+    """Bekleyen işleri iptal eder, takılı işçi süreçlerini öldürür, beklemez.
+
+    ProcessPoolExecutor'ın halka açık API'sinde işçileri sonlandırma yok;
+    `_processes` CPython'un iç sözlüğü (3.9+ ile aynı). Bulunamazsa yalnız
+    beklemesiz kapatma yapılır.
+    """
+    # shutdown() sonrası _processes None olur; işçi listesi önce alınır.
+    procs = list((getattr(ex, "_processes", None) or {}).values())
+    ex.shutdown(wait=False, cancel_futures=True)
+    for proc in procs:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 def run(file_path, archive_mode=False, binarization="otsu",
         write_output=True, word_timeout=600, max_word_width_ratio=0.5,
         max_ink_ratio=0.3, **bin_kwargs):
@@ -107,17 +124,21 @@ def run(file_path, archive_mode=False, binarization="otsu",
 
     # Her worker modeli bir kez yükler (init_worker), her kelimede yeniden değil.
     # multiprocessing.Pool.map bir işçi ölünce sonsuza dek bekler; executor
-    # BrokenProcessPool/TimeoutError ile hatayı yüzeye çıkarır.
+    # BrokenProcessPool/TimeoutError ile hatayı yüzeye çıkarır. `with` bloğu
+    # kullanılmaz: çıkışta shutdown(wait=True) takılı işçiyi beklerdi. Zaman
+    # aşımında bekleyen işler iptal edilir ve işçi süreçleri öldürülür.
+    ex = ProcessPoolExecutor(max_workers=mp.cpu_count(), initializer=init_worker)
     try:
-        with ProcessPoolExecutor(max_workers=mp.cpu_count(),
-                                 initializer=init_worker) as ex:
-            predicted_words = list(ex.map(run2, words, timeout=word_timeout))
-    except BrokenProcessPool:
-        print("Error: OCR işçi süreci çöktü (bellek?); sayfa atlandı.")
+        predicted_words = list(ex.map(run2, words, timeout=word_timeout))
+    except (BrokenProcessPool, FutTimeout) as e:
+        _kill_executor(ex)
+        if isinstance(e, BrokenProcessPool):
+            print("Error: OCR işçi süreci çöktü (bellek?); sayfa atlandı.")
+        else:
+            print(f"Error: OCR {word_timeout} sn içinde bitmedi; sayfa atlandı.")
         return None, 0, 0, ''
-    except FutTimeout:
-        print(f"Error: OCR {word_timeout} sn içinde bitmedi; sayfa atlandı.")
-        return None, 0, 0, ''
+    else:
+        ex.shutdown(wait=True)
 
     predicted_text = ' '.join(predicted_words)
     # Karakter sayisi kelime aralarina eklenen bosluklari icermez.
